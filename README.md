@@ -11,7 +11,7 @@ A premium, modern, responsive Next.js micro-web application built for **FitVed**
 - **Compact & Multi-Select**: Residents can select multiple morning (6–10 AM) and evening (6–9 PM) slots on mobile and desktop without heavy scrolling.
 - **Smart Phone Deduplication**: Prevents duplicate voting by prompting existing phone numbers to update/overwrite their vote.
 - **Success Celebration**: Animated green tick SVG, `canvas-confetti` fireworks, and WhatsApp notification note.
-- **Admin Dashboard (`/admin`)**: Passcode-protected (`fitved2026`), Recharts bar & pie charts, search/filter directory, entry deletion, and CSV/Excel export.
+- **Admin Dashboard (`/admin`)**: Passcode-protected via `NEXT_PUBLIC_ADMIN_PASSWORD`, Recharts bar & pie charts, search/filter directory, entry deletion, and CSV/Excel export.
 - **Supabase + LocalStorage Fallback**: Production Supabase backend ready (`supabase/schema.sql`) + zero-config LocalStorage fallback.
 
 ---
@@ -53,8 +53,42 @@ Follow the prompts to log in to your Vercel account and deploy in seconds!
 
 ## 🗄️ Database Setup (Supabase)
 
-To connect your Supabase database:
+> **The schema step is not optional.** Setting the environment variables alone is not
+> enough — without the tables, every read fails with `PGRST205: Could not find the table
+> 'public.responses' in the schema cache` and `/admin` shows **0 responses** even though
+> the connection is fine. The dashboard now prints the real reason in a banner instead of
+> silently showing zeros.
+
 1. Create a project at [supabase.com](https://supabase.com).
-2. Go to **SQL Editor** in Supabase dashboard and run the script in `supabase/schema.sql`.
-3. Copy your **Project URL** and **Anon API Key** from `Project Settings > API`.
-4. Add them to your Vercel Environment Variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+2. Open **SQL Editor → New query**, paste the entire contents of
+   [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
+   The script is safe to re-run.
+3. Verify it worked — this should return `200` and `[]`, not an error:
+   ```bash
+   curl "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/responses?select=id&limit=1" \
+     -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"
+   ```
+4. Copy your **Project URL** and **publishable (or anon) API key** from
+   `Project Settings → API`.
+5. Add them to Vercel → **Settings → Environment Variables**:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+   - `NEXT_PUBLIC_ADMIN_PASSWORD`
+
+   These are inlined at **build** time, so **redeploy** after changing them —
+   editing a variable does not update an existing deployment.
+
+### Already ran the older schema?
+
+The first version of `schema.sql` put foreign keys on `responses.slot_id` and
+`responses.society_id`. Those reject every insert the app makes, because `slot_id`
+holds a comma-joined multi-select value (`"morning-6-7, custom-0730"`) and
+`society_id` comes from `src/data/societies.json` rather than a seeded table.
+Run [`supabase/migrations/001_drop_response_foreign_keys.sql`](supabase/migrations/001_drop_response_foreign_keys.sql)
+to drop them.
+
+### Without Supabase
+
+If the URL/key are missing or still placeholders, the app runs entirely on
+LocalStorage. That works for a demo, but each browser sees only its own votes —
+so the admin dashboard on your laptop will not show votes cast on a resident's phone.

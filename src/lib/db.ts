@@ -47,7 +47,29 @@ function mapRow(row: any): ResidentResponse {
   };
 }
 
-export async function getAllResponses(): Promise<ResidentResponse[]> {
+/**
+ * Turns a Supabase read failure into something a human can act on. An empty
+ * dashboard and a broken dashboard look identical otherwise, which is exactly
+ * how a missing table goes unnoticed.
+ */
+function describeReadError(code: string | undefined, message: string): string {
+  if (code === 'PGRST205' || /schema cache/i.test(message)) {
+    return 'Database table "public.responses" was not found. Open your Supabase project → SQL Editor and run supabase/schema.sql, then reload this page.';
+  }
+  if (code === '42501' || /permission denied|row-level security/i.test(message)) {
+    return 'Supabase blocked the read (row-level security). Run the policy statements in supabase/schema.sql, then reload this page.';
+  }
+  if (/Invalid API key|JWT/i.test(message)) {
+    return 'Supabase rejected the API key. Check NEXT_PUBLIC_SUPABASE_URL and the publishable/anon key in your environment variables.';
+  }
+  return `Could not load responses from the database: ${message}`;
+}
+
+/** Read that reports why it failed, for surfaces that can show the reason. */
+export async function fetchAllResponses(): Promise<{
+  data: ResidentResponse[];
+  error: string | null;
+}> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('responses')
@@ -55,13 +77,17 @@ export async function getAllResponses(): Promise<ResidentResponse[]> {
       .order('created_at', { ascending: false });
 
     if (error) {
-      // Surface the reason instead of silently showing an empty/stale board.
-      console.error('Supabase read failed:', error.message);
-      return [];
+      console.error('Supabase read failed:', error.code, error.message);
+      return { data: [], error: describeReadError(error.code, error.message) };
     }
-    return (data ?? []).map(mapRow);
+    return { data: (data ?? []).map(mapRow), error: null };
   }
-  return getLocalStore();
+  return { data: getLocalStore(), error: null };
+}
+
+export async function getAllResponses(): Promise<ResidentResponse[]> {
+  const { data } = await fetchAllResponses();
+  return data;
 }
 
 export async function getResponsesBySociety(societyId: string): Promise<ResidentResponse[]> {

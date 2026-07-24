@@ -8,7 +8,7 @@ import { AdminLogin } from '@/components/AdminLogin';
 import { AdminCharts } from '@/components/AdminCharts';
 import { AdminTable } from '@/components/AdminTable';
 import { ResidentResponse } from '@/lib/types';
-import { getAllResponses, deleteResponse, subscribeToResponses } from '@/lib/db';
+import { fetchAllResponses, deleteResponse, subscribeToResponses } from '@/lib/db';
 import { countByCategory, countVotesBySlotId, getSlotLabel } from '@/lib/slots';
 
 export default function AdminPage() {
@@ -16,12 +16,14 @@ export default function AdminPage() {
   const [responses, setResponses] = useState<ResidentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const fetchResponses = async () => {
     setLoading(true);
     try {
-      const data = await getAllResponses();
+      const { data, error } = await fetchAllResponses();
       setResponses(data);
+      setDbError(error);
     } finally {
       setLoading(false);
     }
@@ -119,6 +121,17 @@ export default function AdminPage() {
           <span>Refresh Realtime Data</span>
         </button>
       </div>
+
+      {dbError && (
+        <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4">
+          <p className="text-sm font-black text-[#1D2550]">Database not connected</p>
+          <p className="mt-1 text-sm font-medium text-amber-900">{dbError}</p>
+          <p className="mt-2 text-xs text-amber-800">
+            Until this is fixed the dashboard shows 0 because no responses can be read —
+            it does not mean residents have not voted.
+          </p>
+        </div>
+      )}
 
       {actionError && (
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
