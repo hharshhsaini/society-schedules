@@ -1,0 +1,72 @@
+[
+  {
+    "id": "elan-homes",
+    "slug": "elan-homes",
+    "name": "Elan Homes",
+    "location": "Sarjapur Road, Bangalore",
+    "unitsCount": "450+ Units",
+    "image": "/societies/elan-homes.jpg",
+    "description": "Modern gated community with vibrant active resident fitness culture.",
+    "badge": "🔥 Popular Choice"
+  },
+  {
+    "id": "sattva-signet",
+    "slug": "sattva-signet",
+    "name": "Sattva Signet",
+    "location": "Sarjapur Main Road, Bangalore",
+    "unitsCount": "600+ Units",
+    "image": "/societies/sattva-signet.jpg",
+    "description": "Luxury premium enclave featuring serene open spaces and wellness amenities.",
+    "badge": "Active Poll"
+  },
+  {
+    "id": "bren-imperia",
+    "slug": "bren-imperia",
+    "name": "Bren Imperia",
+    "location": "Haralur Road, Off Sarjapur Road",
+    "unitsCount": "1,200+ Units",
+    "image": "/societies/bren-imperia.jpg",
+    "description": "Spacious architectural residences with dedicated sports and yoga pavilions.",
+    "badge": "High Demand"
+  },
+  {
+    "id": "astro-rosewood",
+    "slug": "astro-rosewood",
+    "name": "Astro Rosewood",
+    "location": "Bellandur / Sarjapur ORR",
+    "unitsCount": "350+ Units",
+    "image": "/societies/astro-rosewood.jpg",
+    "description": "Boutique residential community focused on healthy living and community wellness.",
+    "badge": "Trending"
+  },
+  {
+    "id": "trinity-acers-and-woods",
+    "slug": "trinity-acers-and-woods",
+    "name": "Trinity Acers and Woods",
+    "location": "Sarjapur Road, Bangalore",
+    "unitsCount": "800+ Units",
+    "image": "/societies/trinity-acers-and-woods.jpg",
+    "description": "Lush green township designed for serene morning yoga and meditation routines.",
+    "badge": "New Poll"
+  },
+  {
+    "id": "sjr-parkvista",
+    "slug": "sjr-parkvista",
+    "name": "SJR ParkVista",
+    "location": "Haralur Road, Bangalore",
+    "unitsCount": "550+ Units",
+    "image": "/societies/sjr-parkvista.jpg",
+    "description": "Contemporary park-facing luxury apartments with active wellness group.",
+    "badge": "🔥 Most Active"
+  },
+  {
+    "id": "lapalazzo",
+    "slug": "lapalazzo",
+    "name": "Lapalazzo",
+    "location": "Sarjapur Road, Bangalore",
+    "unitsCount": "300+ Units",
+    "image": "/societies/lapalazzo.jpg",
+    "description": "Exclusive luxury apartments crafted for peaceful residential living.",
+    "badge": "Exclusive"
+  }
+]
