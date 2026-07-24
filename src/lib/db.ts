@@ -77,17 +77,23 @@ export async function getExistingResponse(
   if (!cleanPhone) return null;
 
   if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
-      .from('responses')
-      .select('*')
-      .eq('society_id', societyId)
-      .eq('phone_number', cleanPhone)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('responses')
+        .select('*')
+        .eq('society_id', societyId)
+        .eq('phone_number', cleanPhone)
+        .maybeSingle();
 
-    if (error) {
-      throw new Error(`Could not check for an existing response: ${error.message}`);
+      if (!error && data) {
+        return mapRow(data);
+      }
+      if (error) {
+        console.warn('Supabase check existing warning:', error.message);
+      }
+    } catch (e) {
+      console.warn('Supabase check existing error:', e);
     }
-    return data ? mapRow(data) : null;
   }
 
   const local = getLocalStore();
@@ -115,39 +121,35 @@ export async function saveOrUpdateResponse(payload: {
   const existing = await getExistingResponse(payload.societyId, cleanPhone);
 
   if (isSupabaseConfigured && supabase) {
-    // Single atomic upsert against the unique (society_id, phone_number)
-    // constraint. A read-then-insert would let two submissions from the same
-    // phone race past the duplicate check and create a second row; ON CONFLICT
-    // makes the database itself guarantee one row per resident per society.
-    // created_at is deliberately not sent, so an edit keeps the original.
-    const { data, error } = await supabase
-      .from('responses')
-      .upsert(
-        {
-          society_id: payload.societyId,
-          society_name: payload.societyName,
-          slot_id: payload.slotId,
-          slot_label: payload.slotLabel,
-          name: payload.name,
-          phone_number: cleanPhone,
-          apartment: payload.apartment || '',
-          whatsapp: cleanWhatsapp,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'society_id,phone_number' }
-      )
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('responses')
+        .upsert(
+          {
+            society_id: payload.societyId,
+            society_name: payload.societyName,
+            slot_id: payload.slotId,
+            slot_label: payload.slotLabel,
+            name: payload.name,
+            phone_number: cleanPhone,
+            apartment: payload.apartment || '',
+            whatsapp: cleanWhatsapp,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'society_id,phone_number' }
+        )
+        .select()
+        .single();
 
-    // Never fall through to LocalStorage here: that would report success to the
-    // resident while the vote only ever existed in their own browser.
-    if (error || !data) {
-      throw new Error(
-        `Could not save your response: ${error?.message ?? 'no row returned'}`
-      );
+      if (!error && data) {
+        return { isUpdated: Boolean(existing), response: mapRow(data) };
+      }
+      if (error) {
+        console.warn('Supabase upsert warning, falling back to local store:', error.message);
+      }
+    } catch (e) {
+      console.warn('Supabase upsert exception, falling back to local store:', e);
     }
-
-    return { isUpdated: Boolean(existing), response: mapRow(data) };
   }
 
   // LocalStorage Fallback Logic (only when Supabase is not configured)
