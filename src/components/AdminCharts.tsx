@@ -31,14 +31,21 @@ export function AdminCharts({ responses }: AdminChartsProps) {
     count,
   }));
 
-  // 2. Calculate Morning vs Evening ratio
+  // 2. Calculate Morning vs Evening ratio.
+  // Use the real counts so a one-sided result (e.g. all morning) renders as
+  // 100/0, not 50/50. Only when there are no votes at all do we show a single
+  // neutral slice, so the donut is not blank.
   const { morningCount, eveningCount } = countByCategory(responses);
+  const hasSlotVotes = morningCount + eveningCount > 0;
 
-  const pieData = [
-    { name: 'Morning Slots (AM)', value: morningCount || 1 },
-    { name: 'Evening Slots (PM)', value: eveningCount || 1 },
-  ];
-  const pieColors = ['#1D2550', '#F5B400'];
+  // Colour travels with each datum, so dropping a zero slice never shifts the
+  // remaining one onto the wrong colour.
+  const pieData = hasSlotVotes
+    ? [
+        { name: 'Morning Slots (AM)', value: morningCount, color: '#1D2550' },
+        { name: 'Evening Slots (PM)', value: eveningCount, color: '#F5B400' },
+      ].filter((d) => d.value > 0)
+    : [{ name: 'No votes yet', value: 1, color: '#E2E8F0' }];
 
   // 3. Society Breakdown
   const societyCounts: Record<string, number> = {};
@@ -92,8 +99,8 @@ export function AdminCharts({ responses }: AdminChartsProps) {
                 paddingAngle={5}
                 dataKey="value"
               >
-                {pieData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
               <Tooltip />
