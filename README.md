@@ -12,6 +12,7 @@ A premium, modern, responsive Next.js micro-web application built for **FitVed**
 - **Smart Phone Deduplication**: Prevents duplicate voting by prompting existing phone numbers to update/overwrite their vote.
 - **Success Celebration**: Animated green tick SVG, `canvas-confetti` fireworks, and WhatsApp notification note.
 - **Admin Dashboard (`/admin`)**: Passcode-protected via `NEXT_PUBLIC_ADMIN_PASSWORD`, Recharts bar & pie charts, search/filter directory, entry deletion, and CSV/Excel export.
+- **Admin-Managed Societies**: From `/admin`, add a new community with a photo (auto-compressed to a data URL) — it appears on the home page instantly with the standard yoga timing slots and records votes immediately. Built-in societies are permanent; added ones can be removed.
 - **Supabase + LocalStorage Fallback**: Production Supabase backend ready (`supabase/schema.sql`) + zero-config LocalStorage fallback.
 
 ---

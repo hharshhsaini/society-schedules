@@ -7,6 +7,8 @@ export interface Society {
   image: string;
   description: string;
   badge?: string;
+  /** false for the built-in JSON seed, true for admin-added ones (deletable). */
+  editable?: boolean;
 }
 
 export type TimeCategory = 'morning' | 'evening';

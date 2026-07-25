@@ -1,22 +1,21 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sun, Moon, MapPin, Users } from 'lucide-react';
-import societiesData from '@/data/societies.json';
 import { POLL_SLOTS } from '@/data/pollSlots';
 import { PollSlotCard } from '@/components/PollSlotCard';
 import { CustomSlotPicker } from '@/components/CustomSlotPicker';
 import { PersonalInfoForm } from '@/components/PersonalInfoForm';
 import { DuplicateVoteModal } from '@/components/DuplicateVoteModal';
 import { SuccessModal } from '@/components/SuccessModal';
+import { SocietyImage } from '@/components/SocietyImage';
 import { Society, PollSlot, ResidentResponse, SocietyStats } from '@/lib/types';
 import {
   getResponsesBySociety,
   getExistingResponse,
+  getSocietyBySlug,
   saveOrUpdateResponse,
   computeSocietyStats,
   subscribeToResponses,
@@ -28,11 +27,23 @@ interface SocietyPageProps {
 
 export default function SocietyPage({ params }: SocietyPageProps) {
   const resolvedParams = use(params);
-  const society = (societiesData as Society[]).find((s) => s.slug === resolvedParams.slug);
 
-  if (!society) {
-    notFound();
-  }
+  // Society may be a JSON seed OR an admin-added one in the database, so it is
+  // resolved asynchronously instead of read from the static file at render.
+  const [society, setSociety] = useState<Society | null>(null);
+  const [resolving, setResolving] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    getSocietyBySlug(resolvedParams.slug).then((found) => {
+      if (!active) return;
+      setSociety(found);
+      setResolving(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [resolvedParams.slug]);
 
   const [selectedSlots, setSelectedSlots] = useState<PollSlot[]>([]);
   const [responses, setResponses] = useState<ResidentResponse[]>([]);
@@ -54,17 +65,20 @@ export default function SocietyPage({ params }: SocietyPageProps) {
 
   // Load responses & compute stats
   const loadData = async () => {
+    if (!society) return;
     const data = await getResponsesBySociety(society.id);
     setResponses(data);
   };
 
   useEffect(() => {
+    if (!society) return;
     loadData();
 
     return subscribeToResponses(loadData);
-  }, [society.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [society?.id]);
 
-  const stats: SocietyStats = computeSocietyStats(society.id, responses);
+  const stats: SocietyStats = computeSocietyStats(society?.id ?? '', responses);
 
   // Handle multi-select toggle
   const handleToggleSlot = (slot: PollSlot) => {
@@ -93,7 +107,7 @@ export default function SocietyPage({ params }: SocietyPageProps) {
     apartment?: string;
     whatsapp?: string;
   }) => {
-    if (selectedSlots.length === 0) return;
+    if (!society || selectedSlots.length === 0) return;
 
     const slotIdJoined = selectedSlots.map((s) => s.id).join(', ');
     const slotLabelJoined = selectedSlots.map((s) => s.label).join(', ');
@@ -136,7 +150,7 @@ export default function SocietyPage({ params }: SocietyPageProps) {
 
   // Confirm duplicate vote overwrite
   const handleConfirmDuplicateUpdate = async () => {
-    if (!pendingFormData || selectedSlots.length === 0) return;
+    if (!society || !pendingFormData || selectedSlots.length === 0) return;
 
     const slotIdJoined = selectedSlots.map((s) => s.id).join(', ');
     const slotLabelJoined = selectedSlots.map((s) => s.label).join(', ');
@@ -171,6 +185,35 @@ export default function SocietyPage({ params }: SocietyPageProps) {
   const morningSlots = POLL_SLOTS.filter((s) => s.category === 'morning');
   const eveningSlots = POLL_SLOTS.filter((s) => s.category === 'evening');
 
+  if (resolving) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="flex items-center gap-3 text-sm font-bold text-slate-500">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-[#1D2550]" />
+          Loading society…
+        </div>
+      </div>
+    );
+  }
+
+  if (!society) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
+        <h1 className="text-2xl font-black text-[#1D2550]">Society not found</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          This community may have been removed or the link is incorrect.
+        </p>
+        <Link
+          href="/"
+          className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-[#1D2550] px-4 py-2.5 text-xs font-bold text-[#F5B400]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to All Societies
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-24">
       {/* Back Navigation Bar */}
@@ -188,10 +231,9 @@ export default function SocietyPage({ params }: SocietyPageProps) {
 
       {/* Compact Hero Header Section */}
       <div className="relative h-48 sm:h-64 w-full overflow-hidden bg-[#1D2550]">
-        <Image
+        <SocietyImage
           src={society.image}
           alt={society.name}
-          fill
           priority
           className="object-cover opacity-45 mix-blend-overlay"
         />

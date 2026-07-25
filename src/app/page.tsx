@@ -3,24 +3,38 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Sparkles, Flame, ShieldCheck, Dumbbell, Flower2, Activity, CalendarHeart } from 'lucide-react';
-import societiesData from '@/data/societies.json';
 import { SocietyCard } from '@/components/SocietyCard';
 import { Society, ResidentResponse } from '@/lib/types';
-import { getAllResponses, subscribeToResponses } from '@/lib/db';
+import {
+  getAllResponses,
+  getAllSocieties,
+  subscribeToResponses,
+  subscribeToSocieties,
+} from '@/lib/db';
 
 export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [responses, setResponses] = useState<ResidentResponse[]>([]);
-  const societies: Society[] = societiesData as Society[];
+  const [societies, setSocieties] = useState<Society[]>([]);
 
   useEffect(() => {
     async function loadStats() {
       const data = await getAllResponses();
       setResponses(data);
     }
+    async function loadSocieties() {
+      const data = await getAllSocieties();
+      setSocieties(data);
+    }
     loadStats();
+    loadSocieties();
 
-    return subscribeToResponses(loadStats);
+    const unsubResponses = subscribeToResponses(loadStats);
+    const unsubSocieties = subscribeToSocieties(loadSocieties);
+    return () => {
+      unsubResponses();
+      unsubSocieties();
+    };
   }, []);
 
   // Compute vote counts per society

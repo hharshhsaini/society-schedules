@@ -7,9 +7,19 @@ import { Shield, Users, Trophy, Flame, Sun, Moon, ArrowLeft, Download, RefreshCw
 import { AdminLogin } from '@/components/AdminLogin';
 import { AdminCharts } from '@/components/AdminCharts';
 import { AdminTable } from '@/components/AdminTable';
-import { ResidentResponse } from '@/lib/types';
-import { fetchAllResponses, deleteResponse, subscribeToResponses } from '@/lib/db';
+import { AddSocietyForm } from '@/components/AddSocietyForm';
+import { SocietyImage } from '@/components/SocietyImage';
+import { ResidentResponse, Society } from '@/lib/types';
+import {
+  fetchAllResponses,
+  deleteResponse,
+  subscribeToResponses,
+  getAllSocieties,
+  deleteSociety,
+  subscribeToSocieties,
+} from '@/lib/db';
 import { countByCategory, countVotesBySlotId, getSlotLabel } from '@/lib/slots';
+import { Trash2, MapPin } from 'lucide-react';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -17,6 +27,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [societies, setSocieties] = useState<Society[]>([]);
 
   const fetchResponses = async () => {
     setLoading(true);
@@ -29,11 +40,21 @@ export default function AdminPage() {
     }
   };
 
+  const fetchSocieties = async () => {
+    setSocieties(await getAllSocieties());
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchResponses();
+      fetchSocieties();
 
-      return subscribeToResponses(fetchResponses);
+      const unsubResponses = subscribeToResponses(fetchResponses);
+      const unsubSocieties = subscribeToSocieties(fetchSocieties);
+      return () => {
+        unsubResponses();
+        unsubSocieties();
+      };
     }
   }, [isAuthenticated]);
 
@@ -47,12 +68,29 @@ export default function AdminPage() {
     await fetchResponses();
   };
 
+  const handleDeleteSociety = async (society: Society) => {
+    if (!confirm(`Remove "${society.name}"? Its existing votes are kept.`)) return;
+    setActionError(null);
+    try {
+      await deleteSociety(society.id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not remove the society.');
+    }
+    await fetchSocieties();
+  };
+
   if (!isAuthenticated) {
     return <AdminLogin onSuccess={() => setIsAuthenticated(true)} />;
   }
 
   // Calculate Overview Stats
   const totalResponses = responses.length;
+
+  // Votes per society id, for the manage-societies list
+  const societyVoteCounts: Record<string, number> = {};
+  responses.forEach((r) => {
+    societyVoteCounts[r.societyId] = (societyVoteCounts[r.societyId] || 0) + 1;
+  });
 
   // Top Society
   const societyCounts: Record<string, number> = {};
@@ -209,12 +247,67 @@ export default function AdminPage() {
         <AdminCharts responses={responses} />
       </div>
 
+      {/* Manage Societies */}
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <AddSocietyForm onAdded={fetchSocieties} />
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-black text-[#1D2550]">
+            Societies <span className="text-slate-400">({societies.length})</span>
+          </h3>
+          <p className="text-xs text-slate-500">
+            Built-in communities are permanent; ones you add can be removed.
+          </p>
+
+          <div className="mt-4 max-h-[26rem] space-y-2 overflow-y-auto pr-1">
+            {societies.map((society) => {
+              const votes = societyVoteCounts[society.id] || 0;
+              return (
+                <div
+                  key={society.id}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200/80 p-2.5"
+                >
+                  <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                    <SocietyImage src={society.image} alt={society.name} className="object-cover" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-[#1D2550]">{society.name}</p>
+                    <p className="flex items-center gap-1 truncate text-xs text-slate-500">
+                      <MapPin className="h-3 w-3 shrink-0 text-[#F5B400]" />
+                      {society.location}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                    {votes} {votes === 1 ? 'vote' : 'votes'}
+                  </span>
+                  {society.editable ? (
+                    <button
+                      onClick={() => handleDeleteSociety(society)}
+                      className="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      title="Remove society"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Built-in
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Directory Data Table */}
-      <AdminTable
-        responses={responses}
-        onDelete={handleDelete}
-        onRefresh={fetchResponses}
-      />
+      <div className="mt-8">
+        <AdminTable
+          responses={responses}
+          onDelete={handleDelete}
+          onRefresh={fetchResponses}
+        />
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { ResidentResponse, SocietyStats, SlotVoteStats } from './types';
+import { ResidentResponse, Society, SocietyStats, SlotVoteStats } from './types';
 import { countByCategory, countVotesBySlotId, getSlotLabel } from './slots';
+import societiesData from '@/data/societies.json';
 
 const STORAGE_KEY = 'fitved_resident_responses_v3';
 
@@ -262,6 +263,214 @@ export function subscribeToResponses(onChange: () => void): () => void {
 
   window.addEventListener('fitved_data_changed', onChange);
   return () => window.removeEventListener('fitved_data_changed', onChange);
+}
+
+// ===========================================================================
+// Societies
+//
+// Base communities live in src/data/societies.json (read-only seed). Admins can
+// add more from the dashboard; those go to Supabase when configured, otherwise
+// to LocalStorage. getAllSocieties() returns the seed followed by the added
+// ones. Poll slots are global (src/data/pollSlots.ts), so a newly added society
+// automatically shows the same morning/evening slots and records votes with no
+// extra wiring.
+// ===========================================================================
+
+const SOCIETY_STORAGE_KEY = 'fitved_societies_v1';
+
+const SEED_SOCIETIES: Society[] = (societiesData as Society[]).map((s) => ({
+  ...s,
+  editable: false,
+}));
+
+const SEED_IDS = new Set(SEED_SOCIETIES.map((s) => s.id));
+const SEED_SLUGS = new Set(SEED_SOCIETIES.map((s) => s.slug));
+
+export interface NewSocietyInput {
+  name: string;
+  location: string;
+  unitsCount: string;
+  description?: string;
+  badge?: string;
+  image: string; // data: URL of the uploaded photo
+}
+
+export function slugifySociety(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function uniqueSlug(base: string, taken: Set<string>): string {
+  const root = base || 'society';
+  let slug = root;
+  let n = 2;
+  while (taken.has(slug)) slug = `${root}-${n++}`;
+  return slug;
+}
+
+function mapSocietyRow(row: any): Society {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    location: row.location,
+    unitsCount: row.units_count,
+    image: row.image_url,
+    description: row.description || '',
+    badge: row.badge || undefined,
+    editable: true,
+  };
+}
+
+function getLocalSocieties(): Society[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(SOCIETY_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Society[]) : [];
+  } catch (e) {
+    console.error('LocalStorage societies read error:', e);
+    return [];
+  }
+}
+
+function setLocalSocieties(data: Society[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SOCIETY_STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(new Event('fitved_societies_changed'));
+  } catch (e) {
+    console.error('LocalStorage societies write error:', e);
+  }
+}
+
+/** Seed societies followed by admin-added ones (deduped by slug). */
+export async function fetchAllSocieties(): Promise<{
+  data: Society[];
+  error: string | null;
+}> {
+  let added: Society[] = [];
+  let error: string | null = null;
+
+  if (isSupabaseConfigured && supabase) {
+    const res = await supabase
+      .from('societies')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (res.error) {
+      console.error('Supabase societies read failed:', res.error.code, res.error.message);
+      error = describeReadError(res.error.code, res.error.message);
+    } else {
+      added = (res.data ?? []).map(mapSocietyRow);
+    }
+  } else {
+    added = getLocalSocieties();
+  }
+
+  const seenSlugs = new Set(SEED_SLUGS);
+  const merged = [...SEED_SOCIETIES];
+  for (const soc of added) {
+    if (seenSlugs.has(soc.slug)) continue;
+    seenSlugs.add(soc.slug);
+    merged.push(soc);
+  }
+
+  return { data: merged, error };
+}
+
+export async function getAllSocieties(): Promise<Society[]> {
+  const { data } = await fetchAllSocieties();
+  return data;
+}
+
+export async function getSocietyBySlug(slug: string): Promise<Society | null> {
+  const { data } = await fetchAllSocieties();
+  return data.find((s) => s.slug === slug) ?? null;
+}
+
+export async function addSociety(input: NewSocietyInput): Promise<Society> {
+  const existing = await getAllSocieties();
+  const taken = new Set(existing.map((s) => s.slug));
+  const slug = uniqueSlug(slugifySociety(input.name), taken);
+  const id = `soc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const society: Society = {
+    id,
+    slug,
+    name: input.name.trim(),
+    location: input.location.trim(),
+    unitsCount: input.unitsCount.trim(),
+    image: input.image,
+    description: input.description?.trim() || '',
+    badge: input.badge?.trim() || undefined,
+    editable: true,
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase
+      .from('societies')
+      .insert({
+        id: society.id,
+        slug: society.slug,
+        name: society.name,
+        location: society.location,
+        units_count: society.unitsCount,
+        image_url: society.image,
+        description: society.description,
+        badge: society.badge ?? null,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Could not add the society: ${error?.message ?? 'no row returned'}`);
+    }
+    return mapSocietyRow(data);
+  }
+
+  setLocalSocieties([...getLocalSocieties(), society]);
+  return society;
+}
+
+export async function deleteSociety(id: string): Promise<boolean> {
+  // The JSON seed is code, not data — it cannot be removed from the dashboard.
+  if (SEED_IDS.has(id)) {
+    throw new Error('Built-in societies cannot be deleted.');
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from('societies').delete().eq('id', id);
+    if (error) throw new Error(`Could not delete the society: ${error.message}`);
+    return true;
+  }
+
+  setLocalSocieties(getLocalSocieties().filter((s) => s.id !== id));
+  return true;
+}
+
+export function subscribeToSocieties(onChange: () => void): () => void {
+  if (isSupabaseConfigured && supabase) {
+    const client = supabase;
+    const channel = client
+      .channel('societies-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'societies' },
+        () => onChange()
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }
+
+  if (typeof window === 'undefined') return () => {};
+
+  window.addEventListener('fitved_societies_changed', onChange);
+  return () => window.removeEventListener('fitved_societies_changed', onChange);
 }
 
 export function computeSocietyStats(

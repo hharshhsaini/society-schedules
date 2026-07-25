@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight, MapPin, Users, Flame } from 'lucide-react';
 import { Society } from '@/lib/types';
+import { SocietyImage } from '@/components/SocietyImage';
 
 interface SocietyCardProps {
   society: Society;
@@ -25,10 +25,9 @@ export function SocietyCard({ society, index, voteCount = 0 }: SocietyCardProps)
       >
         {/* Top Image Container with Zoom & Gradient */}
         <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-          <Image
+          <SocietyImage
             src={society.image}
             alt={society.name}
-            fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             priority={index < 3}
