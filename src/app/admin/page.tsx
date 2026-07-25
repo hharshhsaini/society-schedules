@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Shield, Users, Trophy, Flame, Sun, Moon, ArrowLeft, Download, RefreshCw } from 'lucide-react';
+import { Shield, Users, Trophy, Flame, Sun, Moon, ArrowLeft, Download, RefreshCw, LogOut } from 'lucide-react';
 import { AdminLogin } from '@/components/AdminLogin';
 import { AdminCharts } from '@/components/AdminCharts';
 import { AdminTable } from '@/components/AdminTable';
@@ -21,13 +21,47 @@ import {
 import { countByCategory, countVotesBySlotId, getSlotLabel } from '@/lib/slots';
 import { Trash2, MapPin } from 'lucide-react';
 
+const ADMIN_AUTH_KEY = 'fitved_admin_authed';
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Guards the first paint so a refresh doesn't flash the login form before
+  // we have restored the session flag below.
+  const [authChecked, setAuthChecked] = useState(false);
   const [responses, setResponses] = useState<ResidentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [societies, setSocieties] = useState<Society[]>([]);
+
+  // Keep the admin logged in across refreshes for the life of the browser tab.
+  // sessionStorage (not localStorage) so closing the tab ends the session.
+  useEffect(() => {
+    try {
+      setIsAuthenticated(sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true');
+    } catch {
+      /* sessionStorage unavailable (private mode / SSR) — stay logged out */
+    }
+    setAuthChecked(true);
+  }, []);
+
+  const handleLoginSuccess = () => {
+    try {
+      sessionStorage.setItem(ADMIN_AUTH_KEY, 'true');
+    } catch {
+      /* ignore storage errors; auth still holds for this render */
+    }
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem(ADMIN_AUTH_KEY);
+    } catch {
+      /* ignore */
+    }
+    setIsAuthenticated(false);
+  };
 
   const fetchResponses = async () => {
     setLoading(true);
@@ -79,8 +113,14 @@ export default function AdminPage() {
     await fetchSocieties();
   };
 
+  // Wait until the session flag is read so an authenticated refresh does not
+  // briefly render the login screen.
+  if (!authChecked) {
+    return <div className="min-h-[75vh]" />;
+  }
+
   if (!isAuthenticated) {
-    return <AdminLogin onSuccess={() => setIsAuthenticated(true)} />;
+    return <AdminLogin onSuccess={handleLoginSuccess} />;
   }
 
   // Calculate Overview Stats
@@ -150,14 +190,23 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <button
-          onClick={fetchResponses}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-xl bg-[#1D2550] px-4 py-2.5 text-xs font-bold text-[#F5B400] shadow-md hover:bg-[#28336A] active:scale-95"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh Realtime Data</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchResponses}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-xl bg-[#1D2550] px-4 py-2.5 text-xs font-bold text-[#F5B400] shadow-md hover:bg-[#28336A] active:scale-95"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Realtime Data</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 shadow-sm hover:border-red-200 hover:text-red-600 active:scale-95"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Log Out</span>
+          </button>
+        </div>
       </div>
 
       {dbError && (
